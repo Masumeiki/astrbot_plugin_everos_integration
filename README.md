@@ -13,6 +13,7 @@
 | 📊 **WebUI 管理面板** | 状态监控 + 记忆统计 + 快速测试 + 语义检索 |
 | 🌐 **独立 WebUI 服务器** | 下载即用，无需手动启动，访问 `http://IP:18766` 即可 |
 | ⚙️ **配置管理** | 在 AstrBot 后台直接配置连接参数 |
+| 🌏 **中文原生支持** | 内置中文提示词，EverOS 提取的记忆为中文输出（需启用，见后文） |
 
 ---
 
@@ -214,6 +215,47 @@ AstrBot 容器
                             │
 AstrBot 后台 ──→ 插件内嵌页面 ──→ register_web_api ──→ everos 后端
 ```
+
+---
+
+## 🌏 中文支持
+
+EverOS 默认使用英文提示词来提炼记忆，提取结果为英文。本插件已配置中文提示词，需在 EverOS 容器内启用：
+
+```bash
+# 进入 EverOS 容器
+docker exec -it everos sh
+
+# 编辑提示词配置文件
+vi /usr/local/lib/python3.12/site-packages/everos/config/prompt_slots/episode_extract.yaml
+
+# 将 enabled 改为 true，template 填入以下内容：
+```
+
+```yaml
+enabled: true
+template: |
+  你是一位情节记忆生成专家。
+
+  关键语言规则：你必须使用与输入对话内容相同语言输出。输入为中文则输出中文，输入为英文则输出英文。
+
+  请将以下对话内容转换为情节记忆。
+
+  对话开始时间：{conversation_start_time}
+  对话内容：
+  {conversation}
+
+  额外指令：{custom_instructions}
+
+  输出格式：{"title": str, "content": str}
+```
+
+```bash
+# 修改后重启 EverOS 使其生效
+docker restart everos
+```
+
+此后新写入的对话会产生中文记忆摘要，已存在的英文记忆不会自动重写。
 
 ---
 

@@ -29,6 +29,27 @@ except ImportError:
     )
 
 
+def _normalize_item(item: dict, mtype: str = "episode") -> dict:
+    """统一记忆条目的字段名（将 EverOS 各类型字段映射为 content）。"""
+    if not item.get("content"):
+        if mtype == "episode":
+            item["content"] = (
+                item.get("summary")
+                or item.get("subject")
+                or item.get("episode")
+                or json.dumps(item, ensure_ascii=False)[:200]
+            )
+        elif "profile_data" in item:
+            pd = item["profile_data"]
+            if isinstance(pd, dict):
+                item["content"] = pd.get("summary", json.dumps(pd, ensure_ascii=False)[:200])
+            else:
+                item["content"] = str(pd)[:200]
+        else:
+            item["content"] = json.dumps(item, ensure_ascii=False)[:200]
+    return item
+
+
 class StandaloneServer:
     """EverOS 独立 WebUI 服务器。"""
 
@@ -180,6 +201,7 @@ class StandaloneServer:
                         for item in items:
                             if isinstance(item, dict):
                                 item["memory_type"] = item.get("memory_type") or mtype
+                                item = _normalize_item(item, mtype)
                                 all_items.append(item)
                     except Exception:
                         continue
@@ -249,6 +271,7 @@ class StandaloneServer:
                 for item in items:
                     if isinstance(item, dict):
                         item["memory_type"] = item.get("memory_type") or memory_type
+                        item = _normalize_item(item, memory_type)
                 return {"ok": True, "data": {"items": items}}
             except Exception as e:
                 return {"ok": False, "error": str(e), "data": {"items": []}}
@@ -303,6 +326,7 @@ class StandaloneServer:
                     for item in items:
                         if isinstance(item, dict):
                             item["memory_type"] = item.get("memory_type") or key.rstrip("s")
+                            item = _normalize_item(item, key.rstrip("s"))
                             all_items.append(item)
                 return {"ok": True, "data": {"items": all_items}}
             except Exception as e:
