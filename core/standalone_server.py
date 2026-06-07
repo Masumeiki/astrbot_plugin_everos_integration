@@ -125,17 +125,22 @@ class StandaloneServer:
                 ok = health_data.get("status") == "ok"
 
                 stats = {}
-                for mtype in ("episode", "atomic_fact", "agent_case", "agent_skill"):
+                for mtype in ("episode", "profile", "agent_case", "agent_skill"):
                     try:
                         r = await client.post(
                             f"{base_url}/api/v1/memory/get",
-                            json={"memory_type": mtype, "user_id": "baizhi"},
+                            json={
+                                "memory_type": mtype,
+                                "user_id": "baizhi",
+                                "app_id": "astrbot",
+                                "project_id": "default",
+                            },
                         )
                         data = r.json()
-                        items = (data.get("data", {}).get(mtype + "s", []) or
-                                data.get("data", {}).get("episodes", []) or
-                                data.get(mtype + "s", []))
-                        stats[mtype] = len(items) if mtype != "episode" else data.get("data", {}).get("total_count", len(items))
+                        d = data.get("data", {})
+                        # episodes/profiles/agent_cases/agent_skills
+                        items = d.get(mtype + "s", [])
+                        stats[mtype] = d.get("total_count", len(items))
                     except Exception:
                         stats[mtype] = -1
 
@@ -152,19 +157,26 @@ class StandaloneServer:
 
         @self.app.get("/api/everos/memories")
         async def api_memories():
-            """获取各类型记忆。"""
+            """获取各类型记忆（最近活动）。"""
             client = self._get_client()
             base_url = self._get_everos_url()
             try:
                 all_items = []
-                for mtype in ("episode", "atomic_fact", "agent_case", "agent_skill"):
+                for mtype in ("episode", "profile", "agent_case", "agent_skill"):
                     try:
                         r = await client.post(
                             f"{base_url}/api/v1/memory/get",
-                            json={"memory_type": mtype, "limit": 10, "offset": 0},
+                            json={
+                                "memory_type": mtype,
+                                "user_id": "baizhi",
+                                "app_id": "astrbot",
+                                "project_id": "default",
+                            },
                         )
                         data = r.json()
-                        items = data.get("data", {}).get("items", data.get("items", []))
+                        d = data.get("data", {})
+                        # EverOS 返回 episodes/profiles/agent_cases/agent_skills
+                        items = d.get(mtype + "s", [])
                         for item in items:
                             if isinstance(item, dict):
                                 item["memory_type"] = item.get("memory_type") or mtype
@@ -217,18 +229,29 @@ class StandaloneServer:
             """按类型获取记忆。"""
             body = await request.json()
             memory_type = body.get("memory_type", "episode")
-            limit = body.get("limit", 20)
             client = self._get_client()
             base_url = self._get_everos_url()
             try:
-                resp = await client.post(
+                r = await client.post(
                     f"{base_url}/api/v1/memory/get",
-                    json={"memory_type": memory_type, "limit": limit, "offset": 0},
+                    json={
+                        "memory_type": memory_type,
+                        "user_id": "baizhi",
+                        "app_id": "astrbot",
+                        "project_id": "default",
+                    },
                 )
-                resp.raise_for_status()
-                return {"ok": True, "data": resp.json()}
+                r.raise_for_status()
+                data = r.json()
+                d = data.get("data", {})
+                # memory/get 返回 episodes/profiles/agent_cases/agent_skills
+                items = d.get(memory_type + "s", [])
+                for item in items:
+                    if isinstance(item, dict):
+                        item["memory_type"] = item.get("memory_type") or memory_type
+                return {"ok": True, "data": {"items": items}}
             except Exception as e:
-                return {"ok": False, "error": str(e)}
+                return {"ok": False, "error": str(e), "data": {"items": []}}
 
         @self.app.post("/api/everos/flush")
         async def api_flush(request: Request):
@@ -264,16 +287,26 @@ class StandaloneServer:
                     f"{base_url}/api/v1/memory/search",
                     json={
                         "query": query,
-                        "user_id": "webui",
+                        "user_id": "baizhi",
                         "app_id": self.config.get("app_id", "astrbot"),
                         "project_id": self.config.get("project_id", "default"),
                         "top_k": top_k,
                     },
                 )
                 resp.raise_for_status()
-                return {"ok": True, "data": resp.json()}
+                raw = resp.json()
+                # 将 EverOS search 返回的各类型记忆聚合成 items 列表
+                rd = raw.get("data", {})
+                all_items = []
+                for key in ("episodes", "profiles", "agent_cases", "agent_skills"):
+                    items = rd.get(key, [])
+                    for item in items:
+                        if isinstance(item, dict):
+                            item["memory_type"] = item.get("memory_type") or key.rstrip("s")
+                            all_items.append(item)
+                return {"ok": True, "data": {"items": all_items}}
             except Exception as e:
-                return {"ok": False, "error": str(e)}
+                return {"ok": False, "error": str(e), "data": {"items": []}}
 
         @self.app.get("/api/everos/server-info")
         async def api_server_info():

@@ -150,13 +150,29 @@ class EverOSClient:
 
     # ─── 统计 ──────────────────────────────────────────────────────
 
-    async def stats(self) -> dict[str, int]:
+    async def stats(
+        self,
+        user_id: str = "baizhi",
+        app_id: str = "astrbot",
+        project_id: str = "default",
+    ) -> dict[str, int]:
         """获取各 memory_type 的条目计数。"""
         count_map: dict[str, int] = {}
-        for mtype in ("episode", "atomic_fact", "agent_case", "agent_skill"):
+        for mtype in ("episode", "profile", "agent_case", "agent_skill"):
             try:
-                data = await self.memory_get(memory_type=mtype, limit=1)
-                count_map[mtype] = data.get("total", 0)
+                data = await self._client.post(
+                    f"{self.base_url}/api/v1/memory/get",
+                    json={
+                        "memory_type": mtype,
+                        "user_id": user_id,
+                        "app_id": app_id,
+                        "project_id": project_id,
+                    },
+                )
+                result = data.json()
+                d = result.get("data", {})
+                total = d.get("total_count", len(d.get(mtype + "s", [])))
+                count_map[mtype] = total
             except Exception:
                 count_map[mtype] = -1
         return count_map
