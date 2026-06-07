@@ -129,10 +129,13 @@ class StandaloneServer:
                     try:
                         r = await client.post(
                             f"{base_url}/api/v1/memory/get",
-                            json={"memory_type": mtype, "limit": 1},
+                            json={"memory_type": mtype, "user_id": "baizhi"},
                         )
                         data = r.json()
-                        stats[mtype] = data.get("total", 0)
+                        items = (data.get("data", {}).get(mtype + "s", []) or
+                                data.get("data", {}).get("episodes", []) or
+                                data.get(mtype + "s", []))
+                        stats[mtype] = len(items) if mtype != "episode" else data.get("data", {}).get("total_count", len(items))
                     except Exception:
                         stats[mtype] = -1
 
